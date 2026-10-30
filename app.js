@@ -18,6 +18,17 @@ async function boot() {
   me = data; tab = me.role === "barber" ? "slots" : "barbers"; shell();
 }
 
+async function sameUser() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (me && session && session.user.id === me.id) return true;
+  alert("Your login changed (you may be signed in as another user in a different tab). Reloading your account.");
+  boot(); return false;
+}
+sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === "SIGNED_OUT" && me) { me = null; authView(); }
+  else if (ev === "SIGNED_IN" && me && session && session.user.id !== me.id) setTimeout(boot, 0);
+});
+
 function authView(mode = "login", msg = "") {
   const reg = mode === "register";
   app.innerHTML = `<section class="hero"><div><h1 class="h">Fresh cuts, right in your hall.</h1>
@@ -96,14 +107,38 @@ async function vBookings() {
 }
 
 /* ---------- barber ---------- */
+const pad2 = n => String(n).padStart(2, "0");
+let lastDay = "";
+function dayOptions() {
+  let o = "";
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    const k = d.toLocaleDateString("en-CA");
+    o += `<option value="${k}"${k === lastDay ? " selected" : ""}>${d.toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "short" })}</option>`;
+  }
+  return o;
+}
+function timeOptions() {
+  let o = "";
+  for (let m = 8 * 60; m <= 23 * 60 + 30; m += 30) {
+    const v = `${pad2(Math.floor(m / 60))}:${pad2(m % 60)}`;
+    o += `<option value="${v}">${new Date(`2000-01-01T${v}`).toLocaleTimeString("en-MY", T)}</option>`;
+  }
+  return o;
+}
+
 async function vSlots() {
   const { data } = await sb.from("slots").select("*").eq("barber_id", me.id).gt("starts_at", new Date().toISOString()).order("starts_at");
-  view().innerHTML = `<h2 class="h">My slots</h2><form id="sf" class="card pad row"><label>Date and time<input class="in" type="datetime-local" name="t" required></label><button class="btn">Publish slot</button></form>
+  view().innerHTML = `<h2 class="h">My slots</h2><form id="sf" class="card pad row"><label>Day<select class="in" name="d">${dayOptions()}</select></label><label>Time<select class="in" name="tm">${timeOptions()}</select></label><button class="btn">Publish slot</button></form>
   <div class="grid">${(data || []).map(s => `<div class="card pad"><b>${when(s.starts_at)}</b><p class="m">${s.status === "open" ? "Open" : "Booked"}</p>${s.status === "open" ? `<button class="btn ghost" data-act="delslot" data-id="${s.id}">Delete</button>` : ""}</div>`).join("") || `<p class="m">No upcoming slots. Publish your first one above.</p>`}</div>`;
   $("#sf").onsubmit = async e => {
     e.preventDefault();
-    const { error } = await sb.from("slots").insert({ barber_id: me.id, starts_at: new Date(new FormData(e.target).get("t")).toISOString() });
-    if (error) alert(error.code === "23505" ? "You already have a slot at that time." : error.code === "42501" ? "Pick a time in the future." : error.message);
+    if (!(await sameUser())) return;
+    const f = new FormData(e.target), at = new Date(`${f.get("d")}T${f.get("tm")}`);
+    lastDay = f.get("d");
+    if (at <= new Date()) return alert(`${when(at)} has already passed. Pick a later time.`);
+    const { error } = await sb.from("slots").insert({ barber_id: me.id, starts_at: at.toISOString() });
+    if (error) alert(error.code === "23505" ? "You already have a slot at that time." : error.message);
     vSlots();
   };
 }
@@ -114,7 +149,7 @@ async function vProfile() {
   view().innerHTML = `<h2 class="h">Profile</h2><form id="pf" class="card pad book">${f("hall", "Hall (shown to everyone)", b.hall, 'maxlength="60"')}${f("experience", "Experience", b.experience, 'maxlength="60"')}${f("bio", "Short bio", b.bio, 'maxlength="300"')}
   ${f("price", "Haircut price (RM)", b.price, 'type="number" min="5" max="200"')}${f("room", "Room number (only shown after a booking)", p.room_details, 'maxlength="100"')}<button class="btn">Save profile</button></form>`;
   $("#pf").onsubmit = async e => {
-    e.preventDefault(); const v = new FormData(e.target);
+    e.preventDefault(); if (!(await sameUser())) return; const v = new FormData(e.target);
     const r1 = await sb.from("barbers").update({ hall: v.get("hall"), experience: v.get("experience"), bio: v.get("bio"), price: +v.get("price") }).eq("id", me.id);
     const r2 = await sb.from("barber_private").update({ room_details: v.get("room") }).eq("barber_id", me.id);
     alert(r1.error || r2.error ? (r1.error || r2.error).message : "Profile saved.");
@@ -125,6 +160,7 @@ async function vProfile() {
 document.addEventListener("click", async e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
   const a = el.dataset.act, id = el.dataset.id;
+  if (!["mode", "out"].includes(a) && !(await sameUser())) return;
   const rpc = async (fn, args) => { const { error } = await sb.rpc(fn, args); if (error) alert(error.message); shell(); };
   if (a === "mode") authView(el.dataset.mode);
   else if (a === "tab") { tab = el.dataset.k; shell(); }
