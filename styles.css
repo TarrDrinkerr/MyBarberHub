@@ -31,3 +31,7 @@ main{padding:28px 24px;max-width:1100px;margin:0 auto}
 .steps li{padding:20px;counter-increment:s}.steps li::before{content:counter(s);font:500 28px Oswald,sans-serif;color:var(--ac)}.steps h3{margin:6px 0}
 .rev{border-top:1px solid var(--ln);padding:12px 0}
 .set{display:grid;gap:16px;max-width:640px}
+.ph.banner{background-size:cover;background-position:center}
+.hd{position:relative}.hd + .pad{padding-top:40px}
+.av{position:absolute;left:16px;bottom:-28px;width:64px;height:64px;border-radius:50%;border:3px solid var(--sf);background:var(--ln);color:var(--tx);object-fit:cover;display:grid;place-items:center;font:600 26px Oswald,sans-serif}
+.book .ph{height:180px}
