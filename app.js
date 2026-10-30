@@ -29,6 +29,12 @@ sb.auth.onAuthStateChange((ev, session) => {
   else if (ev === "SIGNED_IN" && me && session && session.user.id !== me.id) setTimeout(boot, 0);
 });
 
+async function loadTop() {
+  const { data } = await sb.from("barber_directory").select("*").order("avg_rating", { ascending: false, nullsFirst: false }).limit(3);
+  const box = $("#top"); if (!box || !data || !data.length) return;
+  box.innerHTML = `<h2 class="h">Top barbers</h2><div class="grid">${data.map(b => `<article class="card barber"><div class="ph"></div><div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3><p class="m">${esc(b.hall || "Campus")} · RM${b.price}</p><p>${b.avg_rating ? `${stars(b.avg_rating)} ${b.avg_rating}` : "New barber"} · ${b.cuts_count} cuts</p></div></article>`).join("")}</div>`;
+}
+
 function authView(mode = "login", msg = "") {
   const reg = mode === "register";
   app.innerHTML = `<section class="hero"><div><h1 class="h">Fresh cuts, right in your hall.</h1>
@@ -37,9 +43,17 @@ function authView(mode = "login", msg = "") {
   ${reg ? `<label>Full name<input class="in" name="name" required maxlength="80"></label>` : ""}
   <label>Email<input class="in" type="email" name="email" required></label>
   <label>Password<input class="in" type="password" name="pw" minlength="6" required></label>
-  ${reg ? `<fieldset><legend>I am a</legend><label><input type="radio" name="role" value="customer" checked> Customer</label><label><input type="radio" name="role" value="barber"> Barber</label></fieldset>` : ""}
+  ${reg ? `<fieldset><legend>I am a</legend><label><input type="radio" name="role" value="customer" required> Customer</label><label><input type="radio" name="role" value="barber"> Barber</label></fieldset>` : ""}
   <p class="msg" id="msg" role="alert">${esc(msg)}</p><button class="btn" style="width:100%">${reg ? "Create account" : "Log in"}</button></form>
-  <button class="link" data-act="mode" data-mode="${reg ? "login" : "register"}">${reg ? "Have an account? Log in" : "New here? Create an account"}</button></div></section>`;
+  <button class="link" data-act="mode" data-mode="${reg ? "login" : "register"}">${reg ? "Have an account? Log in" : "New here? Create an account"}</button></div></section>
+  <section class="land"><h2 class="h">How it works</h2><ol class="steps">
+  <li class="card"><h3>Pick a barber</h3><p class="m">Browse student barbers by hall, price and rating.</p></li>
+  <li class="card"><h3>Choose a day and time</h3><p class="m">Any day of the week, from the barber's open slots.</p></li>
+  <li class="card"><h3>Get your cut</h3><p class="m">Pay the barber in person by cash or QR.</p></li>
+  <li class="card"><h3>Rate your barber</h3><p class="m">Ratings unlock once payment is confirmed.</p></li></ol>
+  <p><button class="btn" data-act="mode" data-mode="register">Create an account</button></p></section>
+  <section class="land" id="top"></section>`;
+  loadTop();
   $("#af").onsubmit = async e => {
     e.preventDefault(); const f = new FormData(e.target), m = $("#msg"); m.textContent = "";
     const cred = { email: f.get("email"), password: f.get("pw") };
