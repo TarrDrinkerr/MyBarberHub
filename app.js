@@ -67,7 +67,7 @@ function authView(mode = "login", msg = "") {
 function shell() {
   const tabs = me.role === "barber" ? [["slots", "My slots"], ["bookings", "Bookings"], ["profile", "Profile"]] : [["barbers", "Barbers"], ["mine", "My bookings"]];
   app.innerHTML = `<header class="bar"><b class="h" style="margin:0">MyBarberHub</b><nav>${tabs.map(([k, l]) => `<button class="tab${k === tab ? " on" : ""}" data-act="tab" data-k="${k}">${l}</button>`).join("")}</nav>
-  <span class="m">${esc(me.full_name)} · <button class="link" data-act="out">Log out</button></span></header><main id="view"></main>`;
+  <span class="m">${esc(me.full_name)} · <button class="link" data-act="out">Log out</button> · <button class="link" data-act="del">Delete account</button></span></header><main id="view"></main>`;
   ({ slots: vSlots, bookings: vBookings, profile: vProfile, barbers: vBarbers, mine: vBookings })[tab]();
 }
 
@@ -177,6 +177,12 @@ document.addEventListener("click", async e => {
   if (!["mode", "out"].includes(a) && !(await sameUser())) return;
   const rpc = async (fn, args) => { const { error } = await sb.rpc(fn, args); if (error) alert(error.message); shell(); };
   if (a === "mode") authView(el.dataset.mode);
+  else if (a === "del") {
+    if (prompt("This permanently deletes your account and data. Type DELETE to confirm.") !== "DELETE") return;
+    const { error } = await sb.rpc("delete_my_account");
+    if (error) return alert(error.message);
+    await sb.auth.signOut({ scope: "local" }); me = null; boot();
+  }
   else if (a === "tab") { tab = el.dataset.k; shell(); }
   else if (a === "out") { await sb.auth.signOut(); boot(); }
   else if (a === "open") openBarber(id);
