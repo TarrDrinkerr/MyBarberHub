@@ -3,16 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MyBarberHub Wireframe</title>
+  <title>MyBarberHub</title>
+  
+  <!-- Supabase JS Client CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="css/styles.css">
+  
+  <!-- Root Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
   <!-- DEMO OVERLAY TOOLBAR -->
   <header id="demo-toolbar" class="wireframe-card" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; background-color: #ffffff;">
     <div style="display: flex; align-items: center; gap: 12px;">
-      <h2 style="font-size: 16px; margin: 0; font-weight: 800; letter-spacing: 0.5px;">MYBARBERHUB <span style="font-size: 10px; font-weight: 400; background-color: #111; color: #fff; padding: 2px 6px; border-radius: 2px;">HUD WIREFRAME</span></h2>
+      <h2 style="font-size: 16px; margin: 0; font-weight: 800; letter-spacing: 0.5px;">MYBARBERHUB</h2>
       <span style="font-size: 11px; color: #666;">[ACTIVE ROLE: <strong id="active-role-display">CUSTOMER</strong>]</span>
     </div>
     
@@ -26,7 +30,7 @@
   <!-- 1. AUTHENTICATION VIEW -->
   <main id="view-auth" class="wireframe-container">
     <div class="wireframe-card" style="max-width: 420px; margin: 40px auto; text-align: center;">
-      <h3>[HITBOX: Account Gateway]</h3>
+      <h3>Account Gateway</h3>
       <p style="font-size: 12px; color: #666; margin-bottom: 16px;">Student-to-Student Campus Barber Marketplace</p>
 
       <div class="sub-nav-row" style="margin-bottom: 16px;">
@@ -36,12 +40,12 @@
 
       <form id="auth-form">
         <div class="input-group" style="text-align: left;">
-          <label>[INPUT: Student Email (.edu)]</label>
+          <label>Student Email (.edu)</label>
           <input type="email" id="input-email" class="hitbox-input" placeholder="alex@university.edu" required>
         </div>
 
         <div class="input-group" style="text-align: left;">
-          <label>[SELECT: Account Persona]</label>
+          <label>Account Persona</label>
           <div style="display: flex; gap: 12px; margin-top: 6px;">
             <label style="font-size: 12px; cursor: pointer;">
               <input type="radio" name="role" value="customer" checked> Customer
@@ -73,7 +77,7 @@
     <!-- TAB 1: APPOINTMENTS -->
     <section id="tab-appointments" class="tab-content active">
       
-      <!-- CUSTOMER OPERATIONAL VIEW -->
+      <!-- CUSTOMER VIEW -->
       <div id="appointments-customer-view">
         <div class="sub-nav-row">
           <button id="subtab-make-app" class="hitbox sub-tab active">Book an Appointment</button>
@@ -86,23 +90,17 @@
             <div id="booking-barber-list" class="grid-container" style="margin-top: 12px;"></div>
           </div>
 
-          <!-- Step 2: Hairstyle & Published Slot Selection Window -->
           <div id="step-select-slot" class="step-card hidden">
             <button id="btn-back-to-barbers" class="hitbox-sm">&larr; Back to Barbers</button>
             <h3 id="booking-target-barber" style="margin-top: 10px;">Step 2: Confirm Booking & Hairstyle</h3>
             
             <div class="input-group" style="margin-top: 12px;">
-              <label>[INPUT: Desired Hairstyle / Cut Description]</label>
+              <label>Desired Hairstyle / Cut Description</label>
               <input type="text" id="input-desired-style" class="hitbox-input" placeholder="e.g. Mid Skin Fade with textured crop top" required>
             </div>
 
             <div class="input-group">
-              <label>[SELECT: Service Package]</label>
-              <div id="service-options" class="grid-container-sm"></div>
-            </div>
-
-            <div class="input-group">
-              <label>[SELECT: Available Time Slot (Published by Barber)]</label>
+              <label>Available Time Slot (Published by Barber)</label>
               <div id="slot-options" class="grid-container-sm"></div>
             </div>
 
@@ -116,7 +114,7 @@
         </div>
       </div>
 
-      <!-- BARBER OPERATIONAL VIEW -->
+      <!-- BARBER VIEW -->
       <div id="appointments-barber-view" class="hidden">
         <div class="sub-nav-row">
           <button id="subtab-barber-schedule" class="hitbox sub-tab active">Manage My Schedule</button>
@@ -125,10 +123,10 @@
 
         <div id="subview-barber-schedule" class="subview">
           <div class="wireframe-card">
-            <h3>[HITBOX: Create Open Slot]</h3>
+            <h3>Create Open Slot</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: flex-end; margin-top: 10px;">
               <div class="input-group" style="margin-bottom: 0;">
-                <label>[SELECT: Day]</label>
+                <label>Day</label>
                 <select id="input-slot-day" class="hitbox-input">
                   <option value="Friday">Friday</option>
                   <option value="Saturday">Saturday</option>
@@ -136,7 +134,7 @@
                 </select>
               </div>
               <div class="input-group" style="margin-bottom: 0;">
-                <label>[INPUT: Time Slot]</label>
+                <label>Time Slot</label>
                 <input type="text" id="input-slot-time" class="hitbox-input" placeholder="e.g. 6:00 PM">
               </div>
               <button id="btn-publish-slot" class="hitbox btn-primary" style="height: 42px;">+ Publish Slot</button>
@@ -160,7 +158,7 @@
     <!-- TAB 2: BARBERS DIRECTORY -->
     <section id="tab-barbers" class="tab-content hidden">
       <div class="wireframe-card">
-        <h3>[HITBOX: Campus Barber Search]</h3>
+        <h3>Campus Barber Search</h3>
         <input type="text" id="search-barber" class="hitbox-input" placeholder="🔍 Search barbers by name, dorm hall, or specialty..." style="margin-top: 8px;">
       </div>
 
@@ -180,7 +178,7 @@
 
         <div class="wireframe-card" style="display: flex; flex-direction: column; justify-content: space-between; min-height: 400px;">
           <div>
-            <h4>[HITBOX: Chat Stream]</h4>
+            <h4>Chat Stream</h4>
             <hr style="border: 0; border-top: 1px solid #111; margin: 8px 0;">
             <div id="chat-messages" style="max-height: 320px; overflow-y: auto;"></div>
           </div>
@@ -202,18 +200,18 @@
     <!-- TAB 4: SETTINGS & SUPPORT -->
     <section id="tab-settings" class="tab-content hidden">
       <div class="wireframe-card" style="max-width: 600px; margin: 0 auto;">
-        <h3>[HITBOX: Account Preferences]</h3>
+        <h3>Account Preferences</h3>
         <div class="input-group" style="margin-top: 12px;">
-          <label>[INPUT: Full Name]</label>
+          <label>Full Name</label>
           <input type="text" id="settings-name" class="hitbox-input" value="Alex Student">
         </div>
         <div class="input-group">
-          <label>[INPUT: Campus Dorm / Room Location]</label>
+          <label>Campus Dorm / Room Location</label>
           <input type="text" id="settings-dorm" class="hitbox-input" value="Hall 3, Room 204">
         </div>
         <button id="btn-save-settings" class="hitbox btn-primary" style="margin-bottom: 24px;">Save Profile Changes</button>
         <hr style="border: 0; border-top: 1px solid #111; margin: 20px 0;">
-        <h3>[HITBOX: Support & Dispute Resolution]</h3>
+        <h3>Support & Dispute Resolution</h3>
         <div class="input-group">
           <textarea id="support-message" class="hitbox-input" rows="3" placeholder="Describe the issue..."></textarea>
         </div>
@@ -235,12 +233,14 @@
     </div>
   </div>
 
-  <script src="js/mockData.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/appointments.js"></script>
-  <script src="js/barbers.js"></script>
-  <script src="js/community.js"></script>
-  <script src="js/settings.js"></script>
-  <script src="js/main.js"></script>
+  <!-- JavaScript Modules from Root Directory -->
+  <script src="mockData.js"></script>
+  <script src="supabaseClient.js"></script>
+  <script src="auth.js"></script>
+  <script src="appointments.js"></script>
+  <script src="barbers.js"></script>
+  <script src="community.js"></script>
+  <script src="settings.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
