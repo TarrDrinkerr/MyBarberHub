@@ -9,13 +9,17 @@ const dayLbl = k => new Date(k + "T00:00").toLocaleDateString("en-MY", O);
 const timeLbl = d => new Date(d).toLocaleTimeString("en-MY", T);
 const stars = n => `<span class="star" role="img" aria-label="${n} out of 5">${"★".repeat(Math.round(n))}${"☆".repeat(5 - Math.round(n))}</span>`;
 let me = null, tab = "", st = {};
+const THEMES = [["amber", "Amber"], ["midnight", "Midnight"], ["forest", "Forest"], ["light", "Light"]];
+const setTheme = t => { document.documentElement.dataset.theme = t; try { localStorage.setItem("theme", t); } catch {} };
+const CONTACT = ""; // optional: your support email, shown in Settings
 
 async function boot() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { me = null; return authView(); }
+  try { const t = localStorage.getItem("theme"); if (t) setTheme(t); } catch {}
   const { data } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
   if (!data) { await sb.auth.signOut(); return authView("login", "Profile not found. Please register again."); }
-  me = data; tab = me.role === "barber" ? "slots" : "barbers"; shell();
+  me = data; setTheme(me.theme || "amber"); tab = me.role === "barber" ? "slots" : "barbers"; shell();
 }
 
 async function sameUser() {
@@ -36,6 +40,7 @@ async function loadTop() {
 }
 
 function authView(mode = "login", msg = "") {
+  document.documentElement.dataset.theme = "amber";
   const reg = mode === "register";
   app.innerHTML = `<section class="hero"><div><h1 class="h">Fresh cuts, right in your hall.</h1>
   <p class="m" style="font-size:18px;max-width:480px">Book a trusted student barber on campus. Pick any day, choose a time, pay in person, then rate your cut.</p></div>
@@ -65,10 +70,10 @@ function authView(mode = "login", msg = "") {
 }
 
 function shell() {
-  const tabs = me.role === "barber" ? [["slots", "My slots"], ["bookings", "Bookings"], ["profile", "Profile"]] : [["barbers", "Barbers"], ["mine", "My bookings"]];
+  const tabs = me.role === "barber" ? [["slots", "My slots"], ["bookings", "Bookings"], ["profile", "Profile"], ["settings", "Settings"]] : [["barbers", "Barbers"], ["mine", "My bookings"], ["settings", "Settings"]];
   app.innerHTML = `<header class="bar"><b class="h" style="margin:0">MyBarberHub</b><nav>${tabs.map(([k, l]) => `<button class="tab${k === tab ? " on" : ""}" data-act="tab" data-k="${k}">${l}</button>`).join("")}</nav>
-  <span class="m">${esc(me.full_name)} · <button class="link" data-act="out">Log out</button> · <button class="link" data-act="del">Delete account</button></span></header><main id="view"></main>`;
-  ({ slots: vSlots, bookings: vBookings, profile: vProfile, barbers: vBarbers, mine: vBookings })[tab]();
+  <span class="m">${esc(me.full_name)} · <button class="link" data-act="out">Log out</button></span></header><main id="view"></main>`;
+  ({ settings: vSettings, slots: vSlots, bookings: vBookings, profile: vProfile, barbers: vBarbers, mine: vBookings })[tab]();
 }
 
 /* ---------- customer ---------- */
@@ -78,7 +83,7 @@ async function vBarbers() {
   <article class="card barber"><div class="ph"></div><div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3>
   <p class="m">${esc(b.hall || "Campus")} · ${esc(b.experience)} · RM${b.price}</p>
   <p>${b.avg_rating ? `${stars(b.avg_rating)} ${b.avg_rating} (${b.review_count})` : "No ratings yet"} · ${b.cuts_count} cuts</p>
-  <p class="m">${esc(b.bio)}</p><button class="btn" data-act="open" data-id="${b.id}">See times</button></div></article>`).join("") || `<p class="m">No barbers yet. Barbers appear here after they register as a barber.</p>`}</div>`;
+  <p class="m">${esc(b.bio)}</p>${b.accepting === false ? `<p class="m">Not taking bookings right now.</p>` : `<button class="btn" data-act="open" data-id="${b.id}">See times</button>`}</div></article>`).join("") || `<p class="m">No barbers yet. Barbers appear here after they register as a barber.</p>`}</div>`;
 }
 
 const reviewList = rs => rs.length ? rs.map(r => `<div class="rev"><p style="margin:0">${stars(r.stars)} <span class="m">${esc(String(r.customer_name || "").split(" ")[0])} · ${new Date(r.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}</span></p>${r.comment ? `<p style="margin:4px 0 0">${esc(r.comment)}</p>` : ""}</div>`).join("") : `<p class="m">No reviews yet.</p>`;
@@ -89,14 +94,14 @@ async function openBarber(id) {
     sb.from("barber_directory").select("*").eq("id", id).single(),
     sb.from("slots").select("id,starts_at").eq("barber_id", id).eq("status", "open").gt("starts_at", new Date().toISOString()).order("starts_at"),
     loadReviews(id)]);
-  st = { b, slots: s || [], reviews: rv || [], day: null, slot: null }; vBook();
+  st = { b, slots: b && b.accepting === false ? [] : (s || []), reviews: rv || [], day: null, slot: null }; vBook();
 }
 
 function vBook() {
   const { b, slots, reviews, day, slot } = st, days = [...new Set(slots.map(s => dayKey(s.starts_at)))];
   view().innerHTML = `<button class="link" data-act="tab" data-k="barbers">← All barbers</button><div class="card pad book"><h2 class="h">${esc(b.full_name)}</h2>
   <p class="m">RM${b.price} · ${esc(b.hall)}</p>
-  ${days.length ? `<h3>Pick a day</h3><div class="chips">${days.map(d => `<button class="btn${d === day ? "" : " ghost"}" data-act="day" data-d="${d}">${dayLbl(d)}</button>`).join("")}</div>` : `<p>No open slots yet. Check back soon.</p>`}
+  ${days.length ? `<h3>Pick a day</h3><div class="chips">${days.map(d => `<button class="btn${d === day ? "" : " ghost"}" data-act="day" data-d="${d}">${dayLbl(d)}</button>`).join("")}</div>` : `<p>${b.accepting === false ? "This barber isn't taking bookings right now." : "No open slots yet. Check back soon."}</p>`}
   ${day ? `<h3>Choose a time</h3><div class="chips">${slots.filter(s => dayKey(s.starts_at) === day).map(s => `<button class="btn${s.id === slot ? "" : " ghost"}" data-act="slot" data-id="${s.id}">${timeLbl(s.starts_at)}</button>`).join("")}</div>` : ""}
   ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}<h3>What customers say</h3>${reviewList(reviews)}</div>`;
 }
@@ -174,6 +179,38 @@ async function vProfile() {
   };
 }
 
+/* ---------- settings ---------- */
+async function vSettings() {
+  const barber = me.role === "barber";
+  let acc = true;
+  if (barber) { const { data } = await sb.from("barbers").select("accepting").eq("id", me.id).single(); acc = !data || data.accepting !== false; }
+  view().innerHTML = `<h2 class="h">Settings</h2><div class="set">
+  <form id="nf" class="card pad"><h3 style="margin-top:0">Display name</h3><label>Name<input class="in" name="n" value="${esc(me.full_name)}" required maxlength="80"></label><button class="btn">Save name</button></form>
+  <div class="card pad"><h3 style="margin-top:0">Color theme</h3><div class="chips">${THEMES.map(([k, l]) => `<button class="btn${(me.theme || "amber") === k ? "" : " ghost"}" data-act="theme" data-k="${k}">${l}</button>`).join("")}</div></div>
+  ${barber ? `<div class="card pad"><h3 style="margin-top:0">Bookings</h3><p class="m">${acc ? "Customers can book your open slots." : "Bookings are paused. Customers can't book your slots."}</p><button class="btn${acc ? " ghost" : ""}" data-act="pause" data-v="${acc ? "false" : "true"}">${acc ? "Pause bookings" : "Resume bookings"}</button></div>` : ""}
+  <form id="pw" class="card pad"><h3 style="margin-top:0">Change password</h3><label>New password<input class="in" type="password" name="p1" minlength="6" required autocomplete="new-password"></label><label>Repeat password<input class="in" type="password" name="p2" minlength="6" required autocomplete="new-password"></label><p class="msg" id="pwm" role="alert"></p><button class="btn">Change password</button></form>
+  <div class="card pad"><h3 style="margin-top:0">Privacy and terms</h3>
+  <p class="m">We store your name, email, bookings, ratings and reviews. Payments happen in person; this site never handles money or card details.</p>
+  <p class="m">Barbers see the name and style notes of customers who book them. Customers see a barber's name, hall, price and reviews, and the room number only after booking. Review comments show your first name.</p>
+  <p class="m">You can delete your account at any time below, which removes your data from the site.${CONTACT ? ` Questions: ${esc(CONTACT)}` : ""}</p></div>
+  <div class="card pad"><h3 style="margin-top:0">Delete account</h3><p class="m">Permanently removes your account, slots, bookings and reviews. Cancel any upcoming bookings first.</p><button class="btn ghost" data-act="del">Delete my account</button></div></div>`;
+  $("#nf").onsubmit = async e => {
+    e.preventDefault(); if (!(await sameUser())) return;
+    const n = String(new FormData(e.target).get("n")).trim(); if (!n) return;
+    const { error } = await sb.from("profiles").update({ full_name: n }).eq("id", me.id);
+    if (error) return alert(error.message);
+    me.full_name = n; shell(); alert("Name saved.");
+  };
+  $("#pw").onsubmit = async e => {
+    e.preventDefault(); if (!(await sameUser())) return;
+    const f = new FormData(e.target), m = $("#pwm");
+    if (f.get("p1") !== f.get("p2")) { m.style.color = ""; return (m.textContent = "Passwords don't match."); }
+    const { error } = await sb.auth.updateUser({ password: f.get("p1") });
+    m.style.color = error ? "" : "var(--ac)"; m.textContent = error ? error.message : "Password changed.";
+    if (!error) e.target.reset();
+  };
+}
+
 /* ---------- actions ---------- */
 document.addEventListener("click", async e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
@@ -186,6 +223,17 @@ document.addEventListener("click", async e => {
     const { error } = await sb.rpc("delete_my_account");
     if (error) return alert(error.message);
     await sb.auth.signOut({ scope: "local" }); me = null; boot();
+  }
+  else if (a === "theme") {
+    const k = el.dataset.k; me.theme = k; setTheme(k);
+    const { error } = await sb.from("profiles").update({ theme: k }).eq("id", me.id);
+    if (error) alert(error.message);
+    vSettings();
+  }
+  else if (a === "pause") {
+    const { error } = await sb.from("barbers").update({ accepting: el.dataset.v === "true" }).eq("id", me.id);
+    if (error) alert(error.message);
+    vSettings();
   }
   else if (a === "tab") { tab = el.dataset.k; shell(); }
   else if (a === "out") { await sb.auth.signOut(); boot(); }
