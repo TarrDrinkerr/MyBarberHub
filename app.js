@@ -36,7 +36,7 @@ sb.auth.onAuthStateChange((ev, session) => {
 async function loadTop() {
   const { data } = await sb.from("barber_directory").select("*").order("avg_rating", { ascending: false, nullsFirst: false }).limit(3);
   const box = $("#top"); if (!box || !data || !data.length) return;
-  box.innerHTML = `<h2 class="h">Top barbers</h2><div class="grid">${data.map(b => `<article class="card barber"><div class="ph"></div><div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3><p class="m">${esc(b.hall || "Campus")} · RM${b.price}</p><p>${b.avg_rating ? `${stars(b.avg_rating)} ${b.avg_rating}` : "New barber"} · ${b.cuts_count} cuts</p></div></article>`).join("")}</div>`;
+  box.innerHTML = `<h2 class="h">Top barbers</h2><div class="grid">${data.map(b => `<article class="card barber">${banner(b)}<div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3><p class="m">${esc(b.hall || "Campus")} · RM${b.price}</p><p>${b.avg_rating ? `${stars(b.avg_rating)} ${b.avg_rating}` : "New barber"} · ${b.cuts_count} cuts</p></div></article>`).join("")}</div>`;
 }
 
 function authView(mode = "login", msg = "") {
@@ -80,12 +80,17 @@ function shell() {
 async function vBarbers() {
   const { data, error } = await sb.from("barber_directory").select("*").order("avg_rating", { ascending: false, nullsFirst: false });
   view().innerHTML = `<h2 class="h">Pick a barber</h2>${error ? `<p class="msg">${esc(error.message)}</p>` : ""}<div class="grid">${(data || []).map(b => `
-  <article class="card barber"><div class="ph"></div><div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3>
+  <article class="card barber">${banner(b)}<div class="pad"><h3 style="margin-top:0">${esc(b.full_name)}</h3>
   <p class="m">${esc(b.hall || "Campus")} · ${esc(b.experience)} · RM${b.price}</p>
   <p>${b.avg_rating ? `${stars(b.avg_rating)} ${b.avg_rating} (${b.review_count})` : "No ratings yet"} · ${b.cuts_count} cuts</p>
   <p class="m">${esc(b.bio)}</p>${b.accepting === false ? `<p class="m">Not taking bookings right now.</p>` : `<button class="btn" data-act="open" data-id="${b.id}">See times</button>`}</div></article>`).join("") || `<p class="m">No barbers yet. Barbers appear here after they register as a barber.</p>`}</div>`;
 }
 
+const mediaUrl = (id, kind, v) => v ? sb.storage.from("barber-media").getPublicUrl(`${id}/${kind}.jpg`).data.publicUrl + `?v=${v}` : "";
+const banner = b => {
+  const bu = mediaUrl(b.id, "banner", b.banner_v), au = mediaUrl(b.id, "avatar", b.avatar_v);
+  return `<div class="hd"><div class="ph banner"${bu ? ` style="background-image:url('${esc(bu)}')"` : ""}></div>${au ? `<img class="av" src="${esc(au)}" alt="">` : `<span class="av" aria-hidden="true">${esc((b.full_name || "?").charAt(0).toUpperCase())}</span>`}</div>`;
+};
 const reviewList = rs => rs.length ? rs.map(r => `<div class="rev"><p style="margin:0">${stars(r.stars)} <span class="m">${esc(String(r.customer_name || "").split(" ")[0])} · ${new Date(r.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}</span></p>${r.comment ? `<p style="margin:4px 0 0">${esc(r.comment)}</p>` : ""}</div>`).join("") : `<p class="m">No reviews yet.</p>`;
 const loadReviews = id => sb.from("reviews").select("stars,comment,customer_name,created_at").eq("barber_id", id).order("created_at", { ascending: false }).limit(20);
 
@@ -99,11 +104,11 @@ async function openBarber(id) {
 
 function vBook() {
   const { b, slots, reviews, day, slot } = st, days = [...new Set(slots.map(s => dayKey(s.starts_at)))];
-  view().innerHTML = `<button class="link" data-act="tab" data-k="barbers">← All barbers</button><div class="card pad book"><h2 class="h">${esc(b.full_name)}</h2>
+  view().innerHTML = `<button class="link" data-act="tab" data-k="barbers">← All barbers</button><div class="card book" style="overflow:hidden">${banner(b)}<div class="pad" style="padding-top:40px"><h2 class="h">${esc(b.full_name)}</h2>
   <p class="m">RM${b.price} · ${esc(b.hall)}</p>
   ${days.length ? `<h3>Pick a day</h3><div class="chips">${days.map(d => `<button class="btn${d === day ? "" : " ghost"}" data-act="day" data-d="${d}">${dayLbl(d)}</button>`).join("")}</div>` : `<p>${b.accepting === false ? "This barber isn't taking bookings right now." : "No open slots yet. Check back soon."}</p>`}
   ${day ? `<h3>Choose a time</h3><div class="chips">${slots.filter(s => dayKey(s.starts_at) === day).map(s => `<button class="btn${s.id === slot ? "" : " ghost"}" data-act="slot" data-id="${s.id}">${timeLbl(s.starts_at)}</button>`).join("")}</div>` : ""}
-  ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}<h3>What customers say</h3>${reviewList(reviews)}</div>`;
+  ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}<h3>What customers say</h3>${reviewList(reviews)}</div></div>`;
 }
 
 /* ---------- bookings (customer "mine" and barber "bookings") ---------- */
@@ -179,21 +184,52 @@ async function vProfile() {
   };
 }
 
+/* ---------- photo upload (resize + re-encode in the browser) ---------- */
+const IMG = { avatar: [400, 400], banner: [1200, 400] };
+async function uploadImg(kind, file) {
+  const m = $("#imm"); if (!file) return;
+  if (!(await sameUser())) return;
+  m.style.color = "";
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return (m.textContent = "Choose a JPEG, PNG or WebP image.");
+  if (file.size > 15 * 1024 * 1024) return (m.textContent = "That image is too large (max 15 MB).");
+  m.textContent = "Uploading…";
+  try {
+    const [w, h] = IMG[kind];
+    const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => createImageBitmap(file));
+    const r = Math.max(w / bmp.width, h / bmp.height), sw = w / r, sh = h / r;
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d"); cx.fillStyle = "#000"; cx.fillRect(0, 0, w, h);
+    cx.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, 0, 0, w, h);
+    const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.82));
+    if (!blob) throw new Error("Could not process that image.");
+    const up = await sb.storage.from("barber-media").upload(`${me.id}/${kind}.jpg`, blob, { upsert: true, contentType: "image/jpeg", cacheControl: "3600" });
+    if (up.error) throw up.error;
+    const { error } = await sb.from("barbers").update({ [kind + "_v"]: Date.now() }).eq("id", me.id);
+    if (error) throw error;
+    vSettings();
+  } catch (err) { m.textContent = err.message || "Upload failed."; }
+}
+
 /* ---------- settings ---------- */
 async function vSettings() {
   const barber = me.role === "barber";
-  let acc = true;
-  if (barber) { const { data } = await sb.from("barbers").select("accepting").eq("id", me.id).single(); acc = !data || data.accepting !== false; }
+  let acc = true, av = null, bv = null;
+  if (barber) { const { data } = await sb.from("barbers").select("accepting,avatar_v,banner_v").eq("id", me.id).single(); acc = !data || data.accepting !== false; av = data && data.avatar_v; bv = data && data.banner_v; }
   view().innerHTML = `<h2 class="h">Settings</h2><div class="set">
   <form id="nf" class="card pad"><h3 style="margin-top:0">Display name</h3><label>Name<input class="in" name="n" value="${esc(me.full_name)}" required maxlength="80"></label><button class="btn">Save name</button></form>
   <div class="card pad"><h3 style="margin-top:0">Color theme</h3><div class="chips">${THEMES.map(([k, l]) => `<button class="btn${(me.theme || "amber") === k ? "" : " ghost"}" data-act="theme" data-k="${k}">${l}</button>`).join("")}</div></div>
   ${barber ? `<div class="card pad"><h3 style="margin-top:0">Bookings</h3><p class="m">${acc ? "Customers can book your open slots." : "Bookings are paused. Customers can't book your slots."}</p><button class="btn${acc ? " ghost" : ""}" data-act="pause" data-v="${acc ? "false" : "true"}">${acc ? "Pause bookings" : "Resume bookings"}</button></div>` : ""}
+  ${barber ? `<div class="card pad"><h3 style="margin-top:0">Photos</h3><p class="m">Shown on your barber card and booking page. Images are resized in your browser and hidden location data is removed.</p>${banner({ id: me.id, full_name: me.full_name, avatar_v: av, banner_v: bv })}<div style="height:36px"></div>
+  <div class="row"><label>Banner (wide photo)<input class="in" type="file" id="f-banner" accept="image/jpeg,image/png,image/webp"></label>${bv ? `<button class="btn ghost" data-act="rmimg" data-k="banner">Remove banner</button>` : ""}</div>
+  <div class="row"><label>Profile picture<input class="in" type="file" id="f-avatar" accept="image/jpeg,image/png,image/webp"></label>${av ? `<button class="btn ghost" data-act="rmimg" data-k="avatar">Remove picture</button>` : ""}</div>
+  <p class="msg" id="imm" role="status"></p></div>` : ""}
   <form id="pw" class="card pad"><h3 style="margin-top:0">Change password</h3><label>New password<input class="in" type="password" name="p1" minlength="6" required autocomplete="new-password"></label><label>Repeat password<input class="in" type="password" name="p2" minlength="6" required autocomplete="new-password"></label><p class="msg" id="pwm" role="alert"></p><button class="btn">Change password</button></form>
   <div class="card pad"><h3 style="margin-top:0">Privacy and terms</h3>
   <p class="m">We store your name, email, bookings, ratings and reviews. Payments happen in person; this site never handles money or card details.</p>
   <p class="m">Barbers see the name and style notes of customers who book them. Customers see a barber's name, hall, price and reviews, and the room number only after booking. Review comments show your first name.</p>
   <p class="m">You can delete your account at any time below, which removes your data from the site.${CONTACT ? ` Questions: ${esc(CONTACT)}` : ""}</p></div>
   <div class="card pad"><h3 style="margin-top:0">Delete account</h3><p class="m">Permanently removes your account, slots, bookings and reviews. Cancel any upcoming bookings first.</p><button class="btn ghost" data-act="del">Delete my account</button></div></div>`;
+  if (barber) { $("#f-banner").onchange = e => uploadImg("banner", e.target.files[0]); $("#f-avatar").onchange = e => uploadImg("avatar", e.target.files[0]); }
   $("#nf").onsubmit = async e => {
     e.preventDefault(); if (!(await sameUser())) return;
     const n = String(new FormData(e.target).get("n")).trim(); if (!n) return;
@@ -220,9 +256,18 @@ document.addEventListener("click", async e => {
   if (a === "mode") authView(el.dataset.mode);
   else if (a === "del") {
     if (prompt("This permanently deletes your account and data. Type DELETE to confirm.") !== "DELETE") return;
+    const { count } = await sb.from("bookings").select("id", { count: "exact", head: true }).eq("status", "confirmed");
+    if (count) return alert("Cancel your upcoming bookings before deleting your account.");
+    if (me.role === "barber") await sb.storage.from("barber-media").remove([`${me.id}/avatar.jpg`, `${me.id}/banner.jpg`]);
     const { error } = await sb.rpc("delete_my_account");
     if (error) return alert(error.message);
     await sb.auth.signOut({ scope: "local" }); me = null; boot();
+  }
+  else if (a === "rmimg") {
+    const k = el.dataset.k;
+    const { error } = await sb.from("barbers").update({ [k + "_v"]: null }).eq("id", me.id);
+    if (error) alert(error.message); else await sb.storage.from("barber-media").remove([`${me.id}/${k}.jpg`]);
+    vSettings();
   }
   else if (a === "theme") {
     const k = el.dataset.k; me.theme = k; setTheme(k);
