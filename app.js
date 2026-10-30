@@ -12,6 +12,9 @@ let me = null, tab = "", st = {};
 const THEMES = [["amber", "Amber"], ["midnight", "Midnight"], ["forest", "Forest"], ["light", "Light"]];
 const setTheme = t => { document.documentElement.dataset.theme = t; try { localStorage.setItem("theme", t); } catch {} };
 const CONTACT = ""; // optional: your support email, shown in Settings
+let cs = "rivalry", period = "all", lb = { all: [], month: [] }, cv = { convs: [], active: null, msgs: [], av: {} }, rt = null, chatTimer = null;
+const QUICK = ["Where's your room?", "What styles do you do?", "Can I come earlier?"];
+const stopChat = () => { clearInterval(chatTimer); if (rt) { sb.removeChannel(rt); rt = null; } };
 
 async function boot() {
   const { data: { session } } = await sb.auth.getSession();
@@ -41,6 +44,7 @@ async function loadTop() {
 
 function authView(mode = "login", msg = "") {
   document.documentElement.dataset.theme = "amber";
+  stopChat(); cv = { convs: [], active: null, msgs: [], av: {} };
   const reg = mode === "register";
   app.innerHTML = `<section class="hero"><div><h1 class="h">Fresh cuts, right in your hall.</h1>
   <p class="m" style="font-size:18px;max-width:480px">Book a trusted student barber on campus. Pick any day, choose a time, pay in person, then rate your cut.</p></div>
@@ -70,10 +74,11 @@ function authView(mode = "login", msg = "") {
 }
 
 function shell() {
-  const tabs = me.role === "barber" ? [["slots", "My slots"], ["bookings", "Bookings"], ["profile", "Profile"], ["settings", "Settings"]] : [["barbers", "Barbers"], ["mine", "My bookings"], ["settings", "Settings"]];
+  stopChat();
+  const tabs = me.role === "barber" ? [["slots", "My slots"], ["bookings", "Bookings"], ["profile", "Profile"], ["community", "Community"], ["settings", "Settings"]] : [["barbers", "Barbers"], ["mine", "My bookings"], ["community", "Community"], ["settings", "Settings"]];
   app.innerHTML = `<header class="bar"><b class="h" style="margin:0">MyBarberHub</b><nav>${tabs.map(([k, l]) => `<button class="tab${k === tab ? " on" : ""}" data-act="tab" data-k="${k}">${l}</button>`).join("")}</nav>
   <span class="m">${esc(me.full_name)} · <button class="link" data-act="out">Log out</button></span></header><main id="view"></main>`;
-  ({ settings: vSettings, slots: vSlots, bookings: vBookings, profile: vProfile, barbers: vBarbers, mine: vBookings })[tab]();
+  ({ community: vCommunity, settings: vSettings, slots: vSlots, bookings: vBookings, profile: vProfile, barbers: vBarbers, mine: vBookings })[tab]();
 }
 
 /* ---------- customer ---------- */
@@ -105,7 +110,7 @@ async function openBarber(id) {
 function vBook() {
   const { b, slots, reviews, day, slot } = st, days = [...new Set(slots.map(s => dayKey(s.starts_at)))];
   view().innerHTML = `<button class="link" data-act="tab" data-k="barbers">← All barbers</button><div class="card book" style="overflow:hidden">${banner(b)}<div class="pad" style="padding-top:40px"><h2 class="h">${esc(b.full_name)}</h2>
-  <p class="m">RM${b.price} · ${esc(b.hall)}</p>
+  <p class="m">RM${b.price} · ${esc(b.hall)}</p><button class="btn ghost" data-act="msg" data-id="${b.id}">Message ${esc(b.full_name)}</button>
   ${days.length ? `<h3>Pick a day</h3><div class="chips">${days.map(d => `<button class="btn${d === day ? "" : " ghost"}" data-act="day" data-d="${d}">${dayLbl(d)}</button>`).join("")}</div>` : `<p>${b.accepting === false ? "This barber isn't taking bookings right now." : "No open slots yet. Check back soon."}</p>`}
   ${day ? `<h3>Choose a time</h3><div class="chips">${slots.filter(s => dayKey(s.starts_at) === day).map(s => `<button class="btn${s.id === slot ? "" : " ghost"}" data-act="slot" data-id="${s.id}">${timeLbl(s.starts_at)}</button>`).join("")}</div>` : ""}
   ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}<h3>What customers say</h3>${reviewList(reviews)}</div></div>`;
@@ -182,6 +187,106 @@ async function vProfile() {
     const r2 = await sb.from("barber_private").update({ room_details: v.get("room") }).eq("barber_id", me.id);
     alert(r1.error || r2.error ? (r1.error || r2.error).message : "Profile saved.");
   };
+}
+
+/* ---------- community: rivalry + messages ---------- */
+const mini = (id, v, n) => v ? `<img class="mav" src="${esc(mediaUrl(id, "avatar", v))}" alt="">` : `<span class="mav" aria-hidden="true">${esc((n || "?").charAt(0).toUpperCase())}</span>`;
+
+function vCommunity() {
+  view().innerHTML = `<h2 class="h">Community</h2><div class="chips" style="margin-bottom:20px">${[["rivalry", "Rivalry"], ["chat", "Messages"]].map(([k, l]) => `<button class="btn${cs === k ? "" : " ghost"}" data-act="cs" data-k="${k}">${l}</button>`).join("")}</div><div id="sub"></div>`;
+  stopChat(); if (cs === "chat") vChat(); else vRivalry();
+}
+
+async function vRivalry() {
+  const [a, m] = await Promise.all([sb.rpc("leaderboard", { p_period: "all" }), sb.rpc("leaderboard", { p_period: "month" })]);
+  if (a.error) { $("#sub").innerHTML = `<p class="msg">${esc(a.error.message)}</p>`; return; }
+  lb = { all: a.data || [], month: m.data || [] }; drawRivalry();
+}
+
+function drawRivalry() {
+  const rows = lb[period], by = Object.fromEntries(lb.all.map(r => [r.barber_id, r]));
+  const top = lb.month[0] && lb.month[0].cuts > 0 ? lb.month[0].barber_id : null;
+  const tier = n => n >= 100 ? "Century Club" : n >= 50 ? "50 Club" : n >= 10 ? "10 Club" : n >= 1 ? "First Cut" : "";
+  const bd = r => [r.barber_id === top ? "Barber of the month" : "", tier(by[r.barber_id].cuts)].filter(Boolean).map(x => `<span class="pill">${x}</span>`).join("");
+  const rate = r => r.avg_rating ? `${stars(r.avg_rating)} ${r.avg_rating}` : "No ratings yet";
+  const opts = sel => lb.all.map(r => `<option value="${r.barber_id}"${r.barber_id === sel ? " selected" : ""}>${esc(r.full_name)}</option>`).join("");
+  $("#sub").innerHTML = `<div class="chips" style="margin-bottom:16px">${[["all", "All time"], ["month", "This month"]].map(([k, l]) => `<button class="btn${period === k ? "" : " ghost"}" data-act="period" data-k="${k}">${l}</button>`).join("")}</div>
+  ${rows.length ? `<div class="grid">${rows.slice(0, 3).map((r, i) => `<article class="card barber">${banner({ ...r, id: r.barber_id })}<div class="pad"><h3 style="margin-top:0">${["1st", "2nd", "3rd"][i]} · ${esc(r.full_name)}</h3><p class="m">${esc(r.hall || "Campus")}</p><p><b>${r.cuts}</b> cuts · ${rate(r)}</p><div>${bd(r)}</div></div></article>`).join("")}</div>` : `<p class="m">No barbers yet.</p>`}
+  ${rows.length > 3 ? `<div class="card" style="margin-top:16px">${rows.slice(3).map((r, i) => `<div class="rk"><b>${i + 4}</b>${mini(r.barber_id, r.avatar_v, r.full_name)}<span style="flex:1;min-width:120px"><b>${esc(r.full_name)}</b> <span class="m">${esc(r.hall || "")}</span></span><span><b>${r.cuts}</b> cuts</span><span>${rate(r)}</span><div>${bd(r)}</div></div>`).join("")}</div>` : ""}
+  ${lb.all.length > 1 ? `<h3>Head to head</h3><div class="card pad"><div class="row"><label>Barber A<select id="ha" class="in">${opts(lb.all[0].barber_id)}</select></label><label>Barber B<select id="hb" class="in">${opts(lb.all[1].barber_id)}</select></label></div><div id="hh"></div></div>` : ""}`;
+  if (lb.all.length > 1) { $("#ha").onchange = $("#hb").onchange = drawH2H; drawH2H(); }
+}
+
+function drawH2H() {
+  const g = id => lb.all.find(r => r.barber_id === $(id).value), a = g("#ha"), b = g("#hb");
+  const mo = r => (lb.month.find(x => x.barber_id === r.barber_id) || { cuts: 0 }).cuts;
+  const row = (l, x, y, f = v => v) => `<div class="vs"><b class="${x > y ? "win" : ""}">${f(x)}</b><span class="m">${l}</span><b class="${y > x ? "win" : ""}">${f(y)}</b></div>`;
+  $("#hh").innerHTML = `<div class="vs"><b>${esc(a.full_name)}</b><span></span><b>${esc(b.full_name)}</b></div>` + row("All-time cuts", a.cuts, b.cuts) + row("This month", mo(a), mo(b)) + row("Average rating", +a.avg_rating || 0, +b.avg_rating || 0, v => v || "–") + row("Reviews", a.review_count, b.review_count);
+}
+
+const unread = c => { const rk = me.role === "barber" ? "barber_read_at" : "customer_read_at"; return c.last_sender && c.last_sender !== me.id && (!c[rk] || new Date(c.last_message_at) > new Date(c[rk])); };
+
+async function loadConvs() {
+  const { data } = await sb.from("conversations").select("*").order("last_message_at", { ascending: false, nullsFirst: false });
+  cv.convs = data || [];
+}
+
+function renderList() {
+  const el = $("#cl"); if (!el) return;
+  el.innerHTML = cv.convs.length ? cv.convs.map(c => {
+    const barber = me.role === "barber", n = barber ? c.customer_name : c.barber_name;
+    return `<button class="ci${c.id === cv.active ? " on" : ""}" data-act="conv" data-id="${c.id}">${barber ? mini(c.customer_id, null, n) : mini(c.barber_id, cv.av[c.barber_id], n)}<span class="ctx"><b>${esc(n)}</b><span class="m">${esc(c.last_body || "No messages yet")}</span></span>${unread(c) ? `<i class="dot" role="img" aria-label="Unread"></i>` : ""}</button>`;
+  }).join("") : `<p class="m pad">${me.role === "barber" ? "No messages yet. Customers can message you from your booking page." : "No conversations yet. Open a barber and tap Message."}</p>`;
+}
+
+async function loadMsgs() {
+  const { data } = await sb.from("messages").select("*").eq("conversation_id", cv.active).order("created_at", { ascending: false }).limit(100);
+  cv.msgs = (data || []).reverse();
+  const c = cv.convs.find(x => x.id === cv.active);
+  if (c && unread(c)) { sb.rpc("mark_read", { p_conversation: c.id }); c[me.role === "barber" ? "barber_read_at" : "customer_read_at"] = new Date().toISOString(); renderList(); }
+}
+
+function renderMsgs(jump) {
+  const el = $("#ctm"); if (!el) return;
+  const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  el.innerHTML = cv.msgs.length ? cv.msgs.map(m => `<div class="msgb${m.sender_id === me.id ? " me" : ""}"><p>${esc(m.body)}</p><small class="m">${timeLbl(m.created_at)}</small></div>`).join("") : `<p class="m">No messages yet. Say hello.</p>`;
+  if (near || jump) el.scrollTop = el.scrollHeight;
+}
+
+async function refreshChat() {
+  if (tab !== "community" || cs !== "chat" || !$("#cl")) return;
+  await loadConvs(); renderList();
+  if (cv.active && $("#ctm")) { await loadMsgs(); renderMsgs(); }
+}
+
+async function openConv(id) {
+  const c = cv.convs.find(x => x.id === id); if (!c || !$("#chat")) return;
+  cv.active = id;
+  const other = me.role === "barber" ? c.customer_name : c.barber_name;
+  $("#chat").classList.add("open");
+  $("#ct").innerHTML = `<div class="cth"><button class="link back" data-act="chatback" aria-label="Back to conversations">←</button><b>${esc(other)}</b></div><div id="cbk" class="cbk m"></div><div id="ctm" class="ctm" aria-live="polite"></div>
+  ${me.role === "customer" ? `<div class="chips qk">${QUICK.map(q => `<button class="btn ghost" data-act="chip" data-t="${esc(q)}">${esc(q)}</button>`).join("")}</div>` : ""}
+  <form id="cf" class="cf"><input class="in" name="m" maxlength="500" required autocomplete="off" aria-label="Message" placeholder="Message ${esc(other)}"><button class="btn">Send</button></form>`;
+  $("#cf").onsubmit = async e => {
+    e.preventDefault(); const inp = e.target.m, body = inp.value.trim(); if (!body) return;
+    if (!(await sameUser())) return;
+    inp.value = "";
+    const { error } = await sb.rpc("send_message", { p_conversation: id, p_body: body });
+    if (error) { alert(error.message); inp.value = body; return; }
+    refreshChat();
+  };
+  sb.from("bookings").select("starts_at,status,payment_status").eq("customer_id", c.customer_id).eq("barber_id", c.barber_id).neq("status", "cancelled").order("starts_at", { ascending: false }).limit(1)
+    .then(({ data }) => { const el = $("#cbk"); if (el) el.textContent = data && data[0] ? `Booking: ${when(data[0].starts_at)} · ${label(data[0])}` : "No booking between you two yet."; });
+  await loadMsgs(); renderMsgs(true); renderList();
+}
+
+async function vChat() {
+  $("#sub").innerHTML = `<div id="chat" class="chat card"><div id="cl" class="cl"></div><div id="ct" class="ct"><p class="m pad">Select a conversation.</p></div></div>`;
+  if (me.role === "customer") { const { data } = await sb.from("barber_directory").select("id,avatar_v"); cv.av = Object.fromEntries((data || []).map(b => [b.id, b.avatar_v])); }
+  await loadConvs(); renderList();
+  if (cv.active && cv.convs.some(c => c.id === cv.active)) openConv(cv.active); else cv.active = null;
+  rt = sb.channel("messages-feed").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => refreshChat()).subscribe();
+  chatTimer = setInterval(refreshChat, 10000);
 }
 
 /* ---------- photo upload (resize + re-encode in the browser) ---------- */
@@ -262,6 +367,16 @@ document.addEventListener("click", async e => {
     const { error } = await sb.rpc("delete_my_account");
     if (error) return alert(error.message);
     await sb.auth.signOut({ scope: "local" }); me = null; boot();
+  }
+  else if (a === "cs") { cs = el.dataset.k; vCommunity(); }
+  else if (a === "period") { period = el.dataset.k; drawRivalry(); }
+  else if (a === "conv") openConv(id);
+  else if (a === "chatback") { $("#chat").classList.remove("open"); cv.active = null; renderList(); }
+  else if (a === "chip") { const i = $("#cf").m; i.value = el.dataset.t; i.focus(); }
+  else if (a === "msg") {
+    const { data, error } = await sb.rpc("start_conversation", { p_barber: id });
+    if (error) return alert(error.message);
+    cv.active = data; cs = "chat"; tab = "community"; shell();
   }
   else if (a === "rmimg") {
     const k = el.dataset.k;
