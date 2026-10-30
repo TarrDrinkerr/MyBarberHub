@@ -81,20 +81,24 @@ async function vBarbers() {
   <p class="m">${esc(b.bio)}</p><button class="btn" data-act="open" data-id="${b.id}">See times</button></div></article>`).join("") || `<p class="m">No barbers yet. Barbers appear here after they register as a barber.</p>`}</div>`;
 }
 
+const reviewList = rs => rs.length ? rs.map(r => `<div class="rev"><p style="margin:0">${stars(r.stars)} <span class="m">${esc(String(r.customer_name || "").split(" ")[0])} · ${new Date(r.created_at).toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" })}</span></p>${r.comment ? `<p style="margin:4px 0 0">${esc(r.comment)}</p>` : ""}</div>`).join("") : `<p class="m">No reviews yet.</p>`;
+const loadReviews = id => sb.from("reviews").select("stars,comment,customer_name,created_at").eq("barber_id", id).order("created_at", { ascending: false }).limit(20);
+
 async function openBarber(id) {
-  const [{ data: b }, { data: s }] = await Promise.all([
+  const [{ data: b }, { data: s }, { data: rv }] = await Promise.all([
     sb.from("barber_directory").select("*").eq("id", id).single(),
-    sb.from("slots").select("id,starts_at").eq("barber_id", id).eq("status", "open").gt("starts_at", new Date().toISOString()).order("starts_at")]);
-  st = { b, slots: s || [], day: null, slot: null }; vBook();
+    sb.from("slots").select("id,starts_at").eq("barber_id", id).eq("status", "open").gt("starts_at", new Date().toISOString()).order("starts_at"),
+    loadReviews(id)]);
+  st = { b, slots: s || [], reviews: rv || [], day: null, slot: null }; vBook();
 }
 
 function vBook() {
-  const { b, slots, day, slot } = st, days = [...new Set(slots.map(s => dayKey(s.starts_at)))];
+  const { b, slots, reviews, day, slot } = st, days = [...new Set(slots.map(s => dayKey(s.starts_at)))];
   view().innerHTML = `<button class="link" data-act="tab" data-k="barbers">← All barbers</button><div class="card pad book"><h2 class="h">${esc(b.full_name)}</h2>
   <p class="m">RM${b.price} · ${esc(b.hall)}</p>
   ${days.length ? `<h3>Pick a day</h3><div class="chips">${days.map(d => `<button class="btn${d === day ? "" : " ghost"}" data-act="day" data-d="${d}">${dayLbl(d)}</button>`).join("")}</div>` : `<p>No open slots yet. Check back soon.</p>`}
   ${day ? `<h3>Choose a time</h3><div class="chips">${slots.filter(s => dayKey(s.starts_at) === day).map(s => `<button class="btn${s.id === slot ? "" : " ghost"}" data-act="slot" data-id="${s.id}">${timeLbl(s.starts_at)}</button>`).join("")}</div>` : ""}
-  ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}</div>`;
+  ${slot ? `<h3>Describe your cut</h3><input id="notes" class="in" maxlength="300" aria-label="Hairstyle notes" placeholder="e.g. Mid skin fade, textured top"><button class="btn" data-act="book">Confirm booking</button>` : ""}<h3>What customers say</h3>${reviewList(reviews)}</div>`;
 }
 
 /* ---------- bookings (customer "mine" and barber "bookings") ---------- */
@@ -158,10 +162,10 @@ async function vSlots() {
 }
 
 async function vProfile() {
-  const [{ data: b }, { data: p }] = await Promise.all([sb.from("barbers").select("*").eq("id", me.id).single(), sb.from("barber_private").select("*").eq("barber_id", me.id).single()]);
+  const [{ data: b }, { data: p }, { data: rv }] = await Promise.all([sb.from("barbers").select("*").eq("id", me.id).single(), sb.from("barber_private").select("*").eq("barber_id", me.id).single(), loadReviews(me.id)]);
   const f = (n, l, v, x = "") => `<label>${l}<input class="in" name="${n}" value="${esc(v)}" ${x}></label>`;
   view().innerHTML = `<h2 class="h">Profile</h2><form id="pf" class="card pad book">${f("hall", "Hall (shown to everyone)", b.hall, 'maxlength="60"')}${f("experience", "Experience", b.experience, 'maxlength="60"')}${f("bio", "Short bio", b.bio, 'maxlength="300"')}
-  ${f("price", "Haircut price (RM)", b.price, 'type="number" min="5" max="200"')}${f("room", "Room number (only shown after a booking)", p.room_details, 'maxlength="100"')}<button class="btn">Save profile</button></form>`;
+  ${f("price", "Haircut price (RM)", b.price, 'type="number" min="5" max="200"')}${f("room", "Room number (only shown after a booking)", p.room_details, 'maxlength="100"')}<button class="btn">Save profile</button></form><h2 class="h" style="margin-top:32px">My reviews</h2>${reviewList(rv || [])}`;
   $("#pf").onsubmit = async e => {
     e.preventDefault(); if (!(await sameUser())) return; const v = new FormData(e.target);
     const r1 = await sb.from("barbers").update({ hall: v.get("hall"), experience: v.get("experience"), bio: v.get("bio"), price: +v.get("price") }).eq("id", me.id);
